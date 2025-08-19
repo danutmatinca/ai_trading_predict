@@ -6,10 +6,6 @@ import io
 import pickle
 from typing import Dict, Any
 import numpy as np
-import pandas as pd
-import torch
-import streamlit as st
-import yfinance as yf
 
 # --------------
 # Streamlit-Layout zuerst setzen
@@ -17,14 +13,29 @@ import yfinance as yf
 st.set_page_config(page_title="AI Trading Forecast", layout="wide")
 
 # -------------
-# Projektpfade (damit wir src/* importieren können)
-# -------------
+# Projektpfade (um src/* importieren zu importieren)
+# --- PATH-Setup für Streamlit Cloud ---
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent     # .../ai_trading_predict
+SRC  = ROOT / "src"                        # für Pfadaufrufe wie SRC/"train.py"
+
+# Nur das Projekt-ROOT in sys.path -> damit 'from src.*' funktioniert
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+
+# Ausgabeverzeichnisse sicherstellen (optional, aber praktisch)
+MODELS_DIR  = ROOT / "models"
+OUTPUTS_DIR = ROOT / "outputs"
+MODELS_DIR.mkdir(exist_ok=True)
+OUTPUTS_DIR.mkdir(exist_ok=True)
+
+import pandas as pd
+import torch
+import streamlit as st
+import yfinance as yf
+
 
 from src.utils.config import load_config
 from src.models.lstm import LSTMForecaster
