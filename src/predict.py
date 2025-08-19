@@ -1,3 +1,4 @@
+# SPDX-FileCopyrightText: © 2025 Danut Matinca
 # SPDX-License-Identifier: Polyform-Noncommercial-1.0.0
 
 from __future__ import annotations

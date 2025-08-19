@@ -1,54 +1,84 @@
+# SPDX-FileCopyrightText: © 2025 Danut Matinca
 # SPDX-License-Identifier: Polyform-Noncommercial-1.0.0
 
-from __future__ import annotations
-import subprocess
-import io
-import pickle
-from typing import Dict, Any
-import numpy as np
+"""
+AI Trading Forecast – Streamlit App
+----------------------------------
+Diese Datei ist die Einstiegspunkt-App für lokales Training und Vorhersagen
+(LSTM) auf Aktien/FX/Krypto-Zeitreihen. Der Code ist in klaren Abschnitte
+unterteilt und mit knappen, praxisnahen Kommentaren versehen.
+
+Wichtige Designdetails:
+- Imports und Pfad-Setup stehen *oberhalb* der ersten Streamlit-Anweisung.
+- Wir tragen nur das Projekt-ROOT in sys.path ein, damit `from src.*` überall
+  funktioniert (lokal und in der Streamlit Cloud).
+- `SRC = ROOT / "src"` wird als *Pfadhelfer* verwendet, z. B. für `train.py`.
+- Modelle/Outputs werden automatisch angelegt (keine manuellen Schritte nötig).
+- Training läuft in einem Subprozess; Logs werden live angezeigt, Epochen
+  ausgelesen und über eine Fortschrittsleiste visualisiert.
+"""
 
 # --------------
-# Streamlit-Layout zuerst setzen
+# Standardbibliothek
 # --------------
-st.set_page_config(page_title="AI Trading Forecast", layout="wide")
-
-# -------------
-# Projektpfade (um src/* importieren zu importieren)
-# --- PATH-Setup für Streamlit Cloud ---
 import sys
+import subprocess
+import pickle
 from pathlib import Path
+from typing import Dict, Any
 
-# Nur das Projekt-ROOT in sys.path -> damit 'from src.*' funktioniert
-ROOT = Path(__file__).resolve().parent     # .../ai_trading_predict
-if str(ROOT) not in sys.path:
-    sys.path.insert(0, str(ROOT))
-SRC  = ROOT / "src"                        # für Pfadaufrufe wie SRC/"train.py"
-
-# Ausgabeverzeichnisse sicherstellen (optional, aber praktisch)
-MODELS_DIR  = ROOT / "models"
-OUTPUTS_DIR = ROOT / "outputs"
-MODELS_DIR.mkdir(exist_ok=True)
-OUTPUTS_DIR.mkdir(exist_ok=True)
-
-import pandas as pd
-import torch
+# ----------------------------
+# Drittanbieter (extern)
+# ----------------------------
 import streamlit as st
+import pandas as pd
+import numpy as np
+import torch
 import yfinance as yf
 
+# --------------
+# Projektpfade (nur ROOT -> sys.path)
+# --------------
+ROOT = Path(__file__).resolve().parent            # .../ai_trading_predict
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))                 # erlaubt: `from src.*` überall
+SRC = ROOT / "src"                                # Pfadhelfer (z. B. SRC/"train.py")
 
-from src.utils.config import load_config
-from src.models.lstm import LSTMForecaster
+# Ausgabeordner sicherstellen (Artefakte separat vom Code halten)
+(ROOT / "models").mkdir(exist_ok=True)
+(ROOT / "outputs").mkdir(exist_ok=True)
 
-# --- Streamlit-Seite konfigurieren ---
+# --------------
+# Projektinterne Imports
+# --------------
+from src.utils.config import load_config           # type: ignore
+from src.models.lstm import LSTMForecaster         # type: ignore
+
+# -------------
+# Streamlit – Seite konfigurieren
+# -------------
+# Muss *nach* `import streamlit as st` kommen – sonst NameError.
 st.set_page_config(page_title="AI Trading Forecast", layout="wide")
 
-# ---------------
+# --- Sidebar-Buttons: gleiche Breite + kein Zeilenumbruch ---
+st.markdown("""
+<style>
+  [data-testid="stSidebar"] { width: 16rem; min-width: 16rem; }  /* 16–18rem testen */
+  [data-testid="stSidebar"] .stButton > button {
+    width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+</style>
+""", unsafe_allow_html=True)
+
+# ------------
 # Helfer
-# ---------------
+# ------------
 def sanitize(name: str) -> str:
+    """Erlaubte Dateiname-Zeichen; alles andere wird zu '_'."""
     return "".join(c if c.isalnum() or c in "-._" else "_" for c in str(name))
 
 def deep_update(base: Dict[str, Any], upd: Dict[str, Any]) -> Dict[str, Any]:
+    """Verschmelzt zwei (verschachtelte) Dicts; `upd` überschreibt `base`."""
     out = {**base}
     for k, v in upd.items():
         if isinstance(v, dict) and isinstance(out.get(k), dict):
@@ -58,21 +88,35 @@ def deep_update(base: Dict[str, Any], upd: Dict[str, Any]) -> Dict[str, Any]:
     return out
 
 def write_cfg_tmp(base_cfg_path: str, overrides: Dict[str, Any]) -> Path:
-    """YAML laden, Felder überschreiben, temporäre YAML schreiben, Pfad zurückgeben."""
+    """
+    YAML-Konfiguration laden, Felder mit `overrides` überschreiben und als
+    temporäre Datei in `outputs/_tmp_cfg_<TICKER>.yaml` speichern.
+    """
     base = load_config(base_cfg_path)
     merged = deep_update(base, overrides)
-    import yaml  # lazy import
+    import yaml                 # Lazy-Import (nur wenn gebraucht)
+
     tmp = ROOT / "outputs" / f"_tmp_cfg_{sanitize(overrides['data']['ticker'])}.yaml"
     tmp.parent.mkdir(parents=True, exist_ok=True)
     with tmp.open("w", encoding="utf-8") as f:
         yaml.safe_dump(merged, f, allow_unicode=True, sort_keys=False)
     return tmp
 
-# ---------------
+# -----------
 # Datenbeschaffung
-# ---------------
-def fetch_series_yf(ticker: str, start: str | None, end: str | None,
-                    interval: str, column: str) -> pd.Series:
+# ----------
+def fetch_series_yf(
+    ticker: str,
+    start: str | None,
+    end: str | None,
+    interval: str,
+    column: str,
+) -> pd.Series:
+    """
+    Kursreihe per yfinance laden.
+    - Bei MultiIndex-Spalten (Mehrfachticker) vereinfachen wir die Spalten.
+    - Wenn 'Adj Close' fehlt, auf 'Close' zurückfallen.
+    """
     df = yf.download(
         ticker, start=start, end=end, interval=interval,
         auto_adjust=False, group_by="column", progress=False
@@ -99,6 +143,7 @@ def fetch_series_yf(ticker: str, start: str | None, end: str | None,
 
 
 def fetch_series_stooq(ticker: str, column: str) -> pd.Series:
+    # Kursreihe per Stooq laden (pandas-datareader)
     try:
         from pandas_datareader import data as pdr
     except ImportError:
@@ -112,14 +157,26 @@ def fetch_series_stooq(ticker: str, column: str) -> pd.Series:
     return s
 
 
-def fetch_series_from_source(ticker: str, start: str | None, end: str | None,
-                             interval: str, column: str, source: str) -> pd.Series:
+def fetch_series_from_source(
+    ticker: str,
+    start: str | None,
+    end: str | None,
+    interval: str,
+    column: str,
+    source: str,
+) -> pd.Series:
+    #Schaltet je nach Quelle zwischen yfinance und stooq um
     if (source or "yfinance").lower() == "stooq":
         return fetch_series_stooq(ticker, column)
     return fetch_series_yf(ticker, start, end, interval, column)
 
 
 def build_future_index(s: pd.Series, horizon: int, interval: str) -> pd.DatetimeIndex:
+    """
+    Zeitachsen-Index für die Vorhersage erzeugen.
+    - Wenn die Historie eine Frequenz trägt, verwenden wir diese.
+    - Sonst heuristisch über Intervall (1d/1wk/1mo).
+    """
     freq = getattr(s.index, "freq", None) or pd.infer_freq(s.index)
     if freq:
         from pandas.tseries.frequencies import to_offset
@@ -141,8 +198,14 @@ def build_future_index(s: pd.Series, horizon: int, interval: str) -> pd.Datetime
         idx.append(cur)
     return pd.DatetimeIndex(idx)
 
-
+#----------
+# Modell laden & Inferenz
+#-----------
 def load_model_and_scaler_from_cfg(cfg_path: Path):
+    """
+    Modell (state_dict) und zugehörigen Skaler laden.
+    Erwartet Pfade in der YAML: `paths.best_model` und `paths.model_dir/scaler.pkl`.
+    """
     cfg = load_config(str(cfg_path))
     model_path = Path(cfg["paths"]["best_model"])
     model_dir = Path(cfg["paths"]["model_dir"])
@@ -165,6 +228,7 @@ def load_model_and_scaler_from_cfg(cfg_path: Path):
 
 def make_forecast(series: pd.Series, model: torch.nn.Module, scaler,
                   window: int, horizon: int) -> np.ndarray:
+    # Letztes Fenster skalieren, Vorhersage erzeugen und zurück-transformieren.
     if len(series) < window:
         raise ValueError(f"Zu wenig Datenpunkte ({len(series)}) für window={window}.")
     last_window = series.values[-window:].reshape(-1, 1)
@@ -175,7 +239,8 @@ def make_forecast(series: pd.Series, model: torch.nn.Module, scaler,
     inv = scaler.inverse_transform(pred_scaled.reshape(-1, 1)).reshape(-1)
     return inv
 
-
+#--------------
+# UI – Kopfbereich
 # ----------------
 st.markdown(
     '''
@@ -183,8 +248,6 @@ st.markdown(
     ''',
     unsafe_allow_html=True
 )
-# Kopfbereich
-# ----------------
 st.title("📈📉 AI Stock & Crypto Prediction")
 st.caption("Interaktive App: Daten laden → LSTM trainieren → Vorhersage visualisieren")
 
@@ -196,13 +259,13 @@ st.sidebar.title("⚙️ Einstellungen")
 cfg_path_in = st.sidebar.text_input("Konfiguration (YAML)", "configs/default.yaml")
 data_source = st.sidebar.selectbox("Datenquelle", ["yfinance", "stooq"], index=0)
 
-# Mini-Check Build-Tools (gegen _distutils_hack-Fehler)
+# Einmaliger Check für Build-Tools (vermeidet _distutils_hack-Fehler)
 try:
     import setuptools  # noqa
 except Exception:
     st.warning("Setuptools fehlt/alt. In Env installieren: `python -m pip install -U pip setuptools wheel`")
 
-# Defaults aus YAML ziehen
+# Defaults aus YAML ziehen (falls nicht vorhanden -> Fallback-Defaults)
 try:
     cfg_defaults = load_config(cfg_path_in)
 except Exception:
@@ -219,9 +282,9 @@ interval = st.sidebar.selectbox("Intervall", ["1d", "1wk", "1mo"],
                                 index=["1d", "1wk", "1mo"].index(cfg_defaults["data"]["interval"]))
 column = st.sidebar.selectbox("Preisspalte", ["Adj Close", "Close"],
                               index=0 if cfg_defaults["data"]["column"] == "Adj Close" else 1)
-window = st.sidebar.number_input("Fenstergröße (Vergangenheit)", 10, 365*3,
+window = st.sidebar.number_input("Zeitfenster (Vergangenheit)", 10, 365*3,
                                  int(cfg_defaults["window"]["size"]), 5)
-horizon = st.sidebar.number_input("Horizont (Zukunft)", 1, 90,
+horizon = st.sidebar.number_input("Zeitfenster (Zukunft)", 1, 90,
                                   int(cfg_defaults["window"]["horizon"]), 1)
 epochs = st.sidebar.number_input("Epochen (Training)", 1, 2000,
                                  int(cfg_defaults["training"]["epochs"]), 1)
@@ -231,10 +294,10 @@ device = st.sidebar.selectbox("Device", ["cpu", "cuda"],
                               index=0 if str(cfg_defaults["training"]["device"]).lower() != "cuda" else 1)
 
 st.sidebar.markdown("---")
-col_btn1, col_btn2 = st.sidebar.columns(2)
-train_btn = col_btn1.button("️️🏃‍♂️‍➡️ Trainieren")
-run_btn = col_btn2.button("🔮 Vorhersagen")
-st.sidebar.caption("Modelle werden ticker‑spezifisch unter `models/<TICKER>/` gespeichert.")
+c1, c2 = st.sidebar.columns(2, gap="small")   # zwei gleich breite Spalten
+train_btn = c1.button("️️️️🏃‍♂️‍➡️ Trainieren",  use_container_width=True)
+run_btn   = c2.button("🔮 Prognose", use_container_width=True)
+st.sidebar.caption("Modelle werden ticker-spezifisch unter `models/<TICKER>/` gespeichert.")
 st.sidebar.markdown("---")
 
 # Laufzeit‑Config (ticker‑spezifische Pfade)
@@ -256,54 +319,54 @@ overrides_common = {
 # --------------
 try:
     s = fetch_series_from_source(
-        ticker,
-        cfg_defaults["data"].get("start"),
-        cfg_defaults["data"].get("end"),
-        interval,
-        column,
-        data_source,
+        ticker=ticker,
+        start=cfg_defaults["data"].get("start"),
+        end=cfg_defaults["data"].get("end"),
+        interval=interval,
+        column=column,
+        source=data_source,
     )
     st.subheader(f"Historie – {ticker}")
-    st.line_chart(s.tail(400), height=240)
+    st.line_chart(s.tail(400), height=240)           # Übersicht kompakt halten
 except Exception as e:
     st.error(f"Daten konnten nicht geladen werden: {e}")
     st.stop()
 
 # --------------
-# Trainieren – mit horizontaler Progressbar + Live-Logs
+# Trainieren -Subprozess– mit horizontaler Progressbar + Live-Logs
 # --------------
 if train_btn:
     st.subheader(f"Training – {ticker}")
     cfg_tmp_path = write_cfg_tmp(cfg_path_in, overrides_common)
     model_dir_t.mkdir(parents=True, exist_ok=True)
 
-    # Widgets
     status = st.status("Starte Training …", expanded=True)
-    prog_bar = st.progress(0)           # <-- horizontaler Balken
+    prog_bar = st.progress(0)
     prog_text = st.empty()
     log_box = st.empty()
 
-    # Subprocess aufrufen
+    # Python-Subprozess starten (verwendet die *aktuelle* Umgebung)
     cmd = [sys.executable, str(SRC / "train.py"), "--config", str(cfg_tmp_path)]
-    with subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                          text=True, bufsize=1) as p:
-
+    with subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1
+    ) as p:
         total_epochs = int(epochs) if epochs else 1
         cur_epoch = 0
-        logs = []
+        logs: list[str] = []
 
         for line in p.stdout or []:
             logs.append(line.rstrip("\n"))
+            # Letzte Zeilen im UI anzeigen
             log_box.code("\n".join(logs[-80:]), language="bash")
 
+            # Epochen-Tag parsen – erwartet Zeilen wie "[003] train_loss=..."
             sline = line.strip()
-            # Zeilen wie "[003] train_loss=..." parsen
             if sline.startswith("[") and "]" in sline:
                 tag = sline.split("]", 1)[0].lstrip("[")
                 if tag.isdigit():
                     cur_epoch = int(tag)
-                    pct = int(min(100, max(0, cur_epoch/  max(1, total_epochs) * 100)))
-                    prog_bar.progress(pct)                         # <-- Balken-Update
+                    pct = int(min(100, max(0, cur_epoch / max(1, total_epochs) * 100)))
+                    prog_bar.progress(pct)
                     prog_text.text(f"Epoche {cur_epoch}/{total_epochs}  |  Fortschritt: {pct}%")
 
         ret = p.wait()
@@ -312,9 +375,9 @@ if train_btn:
         prog_bar.progress(100)
         status.update(label=f"Fertig. Modell gespeichert: {model_dir_t}", state="complete")
         st.success(f"Training beendet. Modell: `{model_dir_t / 'best_model.pth'}`")
-        # Cache leeren, damit beim Forecast neu geladen wird
+        # Cache leeren: stellt sicher, dass beim nächsten Vorhersagen das neue Modell geladen wird
         try:
-            st.cache_resource.clear()
+            st.cache_resource.clear()  # Streamlit >= 1.18
         except Exception:
             pass
     else:
