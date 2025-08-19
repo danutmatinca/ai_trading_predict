@@ -1,0 +1,39 @@
+# Basis-Konfiguration für univariate LSTM-Vorhersage
+data:
+  ticker: "AAPL"
+#  ticker: "BTC-USD"
+#  ticker: "BTC-EUR"
+#  ticker: "ETH-USD"
+#  ticker: "ETH-EUR"
+#  ticker: "EUR-USD"
+  start: "2015-01-01"
+  end: null            # null = bis heute
+  interval: "1d"
+  column: "Adj Close"  # "Close" oder "Adj Close"
+
+features:
+  normalize: "standard"   # "standard" oder "minmax"
+
+window:
+  size: 60        # Anzahl vergangener Tage als Input
+  horizon: 5      # Wie viele Tage in die Zukunft vorhersagen
+
+split:
+  val_ratio: 0.2  # Anteil für Validierung am Ende der Serie
+
+training:
+  epochs: 30
+  batch_size: 64
+  lr: 0.001
+  seed: 42
+  device: "cpu"   # "cpu" oder "cuda"
+
+model:
+  hidden_size: 64
+  num_layers: 2
+  dropout: 0.2
+
+paths:
+  model_dir: "models"
+  best_model: "models/best_model.pth"
+  outputs_dir: "outputs"
