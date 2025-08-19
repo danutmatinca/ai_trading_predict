@@ -24,12 +24,11 @@ st.set_page_config(page_title="AI Trading Forecast", layout="wide")
 # Projektpfade (damit wir src/* importieren können)
 # -------------
 ROOT = Path(__file__).resolve().parent
-SRC = ROOT / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
-from utils.config import load_config
-from models.lstm import LSTMForecaster
+from src.utils.config import load_config
+from src.models.lstm import LSTMForecaster
 
 # ---------------
 # Helfer
