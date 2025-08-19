@@ -18,12 +18,11 @@ st.set_page_config(page_title="AI Trading Forecast", layout="wide")
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent     # .../ai_trading_predict
-SRC  = ROOT / "src"                        # für Pfadaufrufe wie SRC/"train.py"
-
 # Nur das Projekt-ROOT in sys.path -> damit 'from src.*' funktioniert
+ROOT = Path(__file__).resolve().parent     # .../ai_trading_predict
 if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
+SRC  = ROOT / "src"                        # für Pfadaufrufe wie SRC/"train.py"
 
 # Ausgabeverzeichnisse sicherstellen (optional, aber praktisch)
 MODELS_DIR  = ROOT / "models"
@@ -39,6 +38,9 @@ import yfinance as yf
 
 from src.utils.config import load_config
 from src.models.lstm import LSTMForecaster
+
+# --- Streamlit-Seite konfigurieren ---
+st.set_page_config(page_title="AI Trading Forecast", layout="wide")
 
 # ---------------
 # Helfer
