@@ -21,7 +21,7 @@ env/
 .ruff_cache/
 
 # Data & artifacts
-models/
+/models/
 outputs/
 *.pth
 *.pkl
