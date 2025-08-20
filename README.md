@@ -1,5 +1,5 @@
 # AI Trading Predict — LSTM (PyTorch & Streamlit)
-[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://<DEINE-STREAMLIT-APP-URL>.streamlit.app/)
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://aitradingpredict-mmsmvxttti9sw64fazr4ee.streamlit.app/)
 <!-- Ersetze <DEINE-STREAMLIT-APP-URL> durch die echte Streamlit-Domain, falls du die App öffentlich gehostet hast. -->
 
 Dieses Projekt dient ausschließlich Studien-, Forschungs- und Demonstrationszwecken.
