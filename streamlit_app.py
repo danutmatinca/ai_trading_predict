@@ -36,6 +36,8 @@ import numpy as np
 import torch
 import yfinance as yf
 
+
+
 # --------------
 # Projektpfade (nur ROOT -> sys.path)
 # --------------
@@ -48,6 +50,14 @@ SRC = ROOT / "src"                                # Pfadhelfer (z. B. SRC/"train
 (ROOT / "models").mkdir(exist_ok=True)
 (ROOT / "outputs").mkdir(exist_ok=True)
 
+st.markdown(
+    '''
+    <p style="font-size:20px;">Dieses Projekt dient ausschließlich Studien-, Forschungs- und Demonstrationszwecken!!!</p>
+    ''',
+    unsafe_allow_html=True
+)
+st.write("")
+st.write("")
 # --------------
 # Projektinterne Imports
 # --------------
@@ -242,19 +252,12 @@ def make_forecast(series: pd.Series, model: torch.nn.Module, scaler,
 #--------------
 # UI – Kopfbereich
 # ----------------
-st.markdown(
-    '''
-    <p style="font-size:18px;">Dieses Projekt dient ausschließlich Studien-, Forschungs- und Demonstrationszwecken!!!</p>
-    ''',
-    unsafe_allow_html=True
-)
 st.title("📈📉 AI Stock & Crypto Prediction")
 st.caption("Interaktive App: Daten laden → LSTM trainieren → Vorhersage visualisieren")
 
 # ---------------
 # Sidebar – Konfiguration
 # ---------------
-
 st.sidebar.title("⚙️ Einstellungen")
 cfg_path_in = st.sidebar.text_input("Konfiguration (YAML)", "configs/default.yaml")
 data_source = st.sidebar.selectbox("Datenquelle", ["yfinance", "stooq"], index=0)
@@ -401,17 +404,20 @@ if run_btn:
         fidx = build_future_index(s, int(horizon), interval)
         f_prog.progress(100)
 
-        st.subheader("Vorhersage")
+        st.subheader("Vorhersage – Tabelle")
+        st.caption("Detailierte Werte der berechneten Prognose")
         df_forecast = pd.DataFrame({"timestamp": fidx, "forecast": forecast_vals})
         st.dataframe(df_forecast, use_container_width=True, height=240)
 
-        # Plot: letzte Window-Punkte + Forecast
+        st.subheader("Vorhersage – Verlauf (Forecast vs History)")
+        st.caption("Grafische Darstellung: letzte bekannten Werte + Vorhersage")
         hist = s.tail(int(window))
         chart_df = pd.concat(
             [hist.rename("History"), pd.Series(forecast_vals, index=fidx, name="Forecast")],
             axis=1,
         )
-        st.line_chart(chart_df, height=320)
+        st.line_chart(chart_df, use_container_width=True, height=320)
+
 
         # Download
         out_csv = df_forecast.to_csv(index=False).encode("utf-8")
@@ -422,7 +428,21 @@ if run_btn:
         st.warning("Kein Modell für diesen Ticker gefunden. Bitte zuerst **Trainieren** klicken.")
     except Exception as e:
         st.exception(e)
-st.caption("Dieses Projekt dient ausschließlich Studien-, Forschungs- und Demonstrationszwecken. "
-           "Es handelt sich nicht um ein Finanzwerkzeug, darf nicht als solches verstanden oder verwendet werden und bietet keinerlei finanzielle, "
-           "steuerliche oder rechtliche Beratung. Jegliche Nutzung erfolgt auf eigene Verantwortung. Der Autor übernimmt keine Haftung für Schäden "
-           "oder Verluste, die aus der Anwendung des Programms entstehen.")
+
+st.markdown(
+    """
+    <div style='text-align: center; font-size: 13px; color: #9ca3af; line-height: 1.4; margin-top: 2rem;'>
+        <p>
+            Dieses Projekt dient ausschließlich Studien-, Forschungs- und Demonstrationszwecken.<br>
+            Es handelt sich nicht um ein Finanzwerkzeug und bietet keinerlei finanzielle, steuerliche oder rechtliche Beratung.<br>
+            Jegliche Nutzung erfolgt auf eigene Verantwortung. Der Autor übernimmt keine Haftung für Schäden oder Verluste,
+            die aus der Anwendung des Programms entstehen.
+        </p>
+        <br>
+        <p>
+            © 2025 Danut Matinca – Powered by Streamlit · Third-Party Licenses siehe THIRD_PARTY_LICENSES.md
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
