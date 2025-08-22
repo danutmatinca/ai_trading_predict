@@ -189,11 +189,11 @@ Durch interne Speicher- und Gate-Mechanismen kann ein LSTM sowohl kurzfristige S
 ---
 
 ## Screenshots
-Beispiele der Streamlit-Anwendung (falls vorhanden):
-![Screenshot 1](docs/screenshot1.png)
-![Screenshot 2](docs/screenshot2.png)
-![Screenshot 3](docs/screenshot3.png)
-
+Beispiele der Streamlit-Anwendung:
+![Screenshot 1](docs/Screenshot1.png)
+![Screenshot 2](docs/Screenshot2.png)
+![Screenshot 3](docs/Screenshot3.png)
+![Screenshot 4](docs/Screenshot4.png)
 ---
 
 ## Urheberrecht und Lizenz
